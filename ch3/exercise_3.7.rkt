@@ -20,9 +20,24 @@
   '((program (expression) a-program)
 
     (expression (number) const-exp)
+
     (expression
      ("-" "(" expression "," expression ")")
      diff-exp)
+
+
+    (expression
+     ("+" "(" expression "," expression ")")
+     add-exp)
+
+
+    (expression
+     ("*" "(" expression "," expression ")")
+     mul-exp)
+
+    (expression
+     ("/" "(" expression "," expression ")")
+     div-exp)
 
     (expression
      ("zero?" "(" expression ")")
@@ -54,6 +69,15 @@
   (const-exp
    (num number?))
   (diff-exp
+   (exp1 expression?)
+   (exp2 expression?))
+  (add-exp
+   (exp1 expression?)
+   (exp2 expression?))
+  (mul-exp
+   (exp1 expression?)
+   (exp2 expression?))
+  (div-exp
    (exp1 expression?)
    (exp2 expression?))
   (zero?-exp
@@ -102,6 +126,43 @@
   (cases program pgm
     (a-program (exp1) (value-of exp1 (init-env)))))
 
+(define (value-of exp env)
+  (cases expression exp
+         (const-exp (num) (num-val num))
+         (var-exp (var) (apply-env var env))
+         (diff-exp (exp1 exp2)
+                   (num-val
+                    (-
+                     (expval->num (value-of exp1 env))
+                     (expval->num (value-of exp2 env)))))
+         (add-exp (exp1 exp2)
+                   (num-val
+                    (+
+                     (expval->num (value-of exp1 env))
+                     (expval->num (value-of exp2 env)))))
+         (mul-exp (exp1 exp2)
+                   (num-val
+                    (*
+                     (expval->num (value-of exp1 env))
+                     (expval->num (value-of exp2 env)))))
+         (div-exp (exp1 exp2)
+                   (num-val
+                    (/
+                     (expval->num (value-of exp1 env))
+                     (expval->num (value-of exp2 env)))))
+         (zero?-exp (exp1) (bool-val (zero? (expval->num(value-of exp1 env)))))
+         (if-exp (exp1 exp2 exp3)
+                 (if (expval->bool (value-of exp1 env))
+                     (value-of exp2 env)
+                     (value-of exp3 env)))
+         (let-exp (var exp1 body)
+                  (value-of
+                   body
+                   (extend-env var (value-of exp1 env) env)))
+         (minus-exp (exp1)
+                    (num-val (- 0 (expval->num (value-of exp1 env)))))
+         ))
+
 
 (define (empty-env)
   (lambda (search-var)
@@ -133,3 +194,12 @@
     (extend-env
      'x (num-val 10)
      (empty-env)))))
+
+;; code
+
+;; (run "minus(-(minus(5), 9))")
+;; (run  "if zero?(-(11,11)) then minus(3) else 4")
+;; (run "+(5, 10)")
+;; (run "/(1, 3)")
+;; (run "*(1, 10)")
+;; (run "*(3, /(1, 3))")
