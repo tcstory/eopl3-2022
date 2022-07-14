@@ -196,7 +196,7 @@
 
 (define (expval->cons val)
   (cases expval val
-         (cons-val (a b) (cons a (cons b `())))
+         (cons-val (a b) (cons a b))
          (empty-val () `())
          (else (report-expval-extractor-error 'cons val))))
 
@@ -252,7 +252,7 @@
                   saved-env
                   (loop
                    (cdr vars)
-                   (expval->cons (cadr vals))
+                   (expval->cons (cdr vals))
                    (extend-env (car vars) (car vals) saved-env))))))
         (value-of body (loop vars (expval->cons (value-of exp1 env)) env))))
 
@@ -340,7 +340,7 @@
                    (expval->cons (value-of exp1 env))))
 
          (cdr-exp (exp1)
-                  (cadr
+                  (cdr
                    (expval->cons (value-of exp1 env))))
          (list-exp (args)
                    (list-val-handler (map (lambda (arg)
