@@ -190,9 +190,7 @@
 (define-datatype proc proc?
   (procedure
    (var (list-of identifier?))
-   (body expression?)
-   (saved-env environment?))
-  )
+   (body expression?)))
 
 
 (define-datatype expval expval?
@@ -293,10 +291,10 @@
   )
 
 
-(define (apply-procedure proc1 vals)
+(define (apply-procedure proc1 vals env)
   (cases proc proc1
-        (procedure (vars body saved-env)
-                   (value-of body (extend-env-multiple vars vals saved-env)))))
+        (procedure (vars body)
+                   (value-of body (extend-env-multiple vars vals env)))))
 
 (define (run string)
   (value-of-program (scan&parse string)))
@@ -391,14 +389,14 @@
 
          (unpack-exp (vars exp1 body) (unpack-exp-handler vars exp1 body env))
 
-         (proc-exp (vars body) (proc-val (procedure vars body env)))
+         (proc-exp (vars body) (proc-val (procedure vars body)))
          (call-exp (rator rands)
                    (let ((proc (expval->proc (value-of rator env)))
                          (args
                           (map
                            (lambda (rand) (value-of rand env))
                            rands)))
-                     (apply-procedure proc args)
+                     (apply-procedure proc args env)
                      ))
 
          ))
@@ -438,18 +436,25 @@
 ;; code
 
 ;; (run "
-;; let makemult = proc (maker)
-;;                 proc (x)
-;;                    if zero?(x)
-;;                    then 0
-;;                    else -(((maker maker) -(x, 1)), -4)
-;; in let times4 = proc (x) ((makemult makemult) x) in (times4 3)
+;; let a = 3
+;; in let p = proc (x) -(x, a)
+;;         a = 5
+;;     in -(a, (p 2))
+;; ")
+
+
+;; (run "
+;; let a = 3
+;; in let p = proc (y) proc () -(a, y)
+;;         a = 5
+;;     in  ((p 10))
 ;; ")
 
 
 (run "
-let a = 3 z = 10
-in let p = proc (x) -(x, a)
-        a = 5
-    in -(z, (p 2))
+let a = 3
+in let p = proc (z) a
+in let f = proc (x) (p 0)
+in let a = 5
+in (f 2)
 ")
