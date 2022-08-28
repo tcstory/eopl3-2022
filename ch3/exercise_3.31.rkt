@@ -61,6 +61,10 @@
      ("let" (arbno identifier "=" expression) "in" expression)
      let-exp)
 
+    (expression
+     ("letrec" identifier "(" (separated-list identifier "," ) ")" "=" expression "in" expression)
+     letrec-exp)
+
 
     (expression
      ("let*" (arbno identifier "=" expression) "in" expression)
@@ -148,6 +152,11 @@
    (vars (list-of identifier?))
    (exps (list-of expression?))
    (body expression?))
+  (letrec-exp
+   (p-name identifier?)
+   (b-vars (list-of identifier?))
+   (p-body expression?)
+   (letrec-body expression?))
   (let*-exp
    (vars (list-of identifier?))
    (exps (list-of expression?))
@@ -190,7 +199,9 @@
 (define-datatype proc proc?
   (procedure
    (var (list-of identifier?))
-   (body expression?)))
+   (body expression?)
+   (saved-env environment?))
+  )
 
 
 (define-datatype expval expval?
@@ -281,20 +292,11 @@
                    (extend-env (car vars) (car vals) saved-env))))))
         (value-of body (loop vars (expval->cons (value-of exp1 env)) env))))
 
-(define (extend-env-multiple vars vals env)
-  (if (null? vars)
-      env
-      (extend-env-multiple
-       (cdr vars)
-       (cdr vals)
-       (extend-env (car vars) (car vals) env)))
-  )
 
-
-(define (apply-procedure proc1 vals env)
+(define (apply-procedure proc1 vals)
   (cases proc proc1
-        (procedure (vars body)
-                   (value-of body (extend-env-multiple vars vals env)))))
+        (procedure (vars body saved-env)
+                   (value-of body (extend-env-multiple vars vals saved-env)))))
 
 (define (run string)
   (value-of-program (scan&parse string)))
@@ -358,6 +360,8 @@
                      (value-of exp3 env)))
          (let-exp (vars exps body)
                   (let-exp-handler vars exps body env env))
+         (letrec-exp (p-name b-vars p-body letrec-body)
+                     (value-of letrec-body (extend-env-rec p-name b-vars p-body env)))
          (let*-exp (vars exps body)
                    (let*-exp-handler vars exps body env))
          (minus-exp (exp1)
@@ -389,14 +393,14 @@
 
          (unpack-exp (vars exp1 body) (unpack-exp-handler vars exp1 body env))
 
-         (proc-exp (vars body) (proc-val (procedure vars body)))
+         (proc-exp (vars body) (proc-val (procedure vars body env)))
          (call-exp (rator rands)
                    (let ((proc (expval->proc (value-of rator env)))
                          (args
                           (map
                            (lambda (rand) (value-of rand env))
                            rands)))
-                     (apply-procedure proc args env)
+                     (apply-procedure proc args)
                      ))
 
          ))
@@ -412,6 +416,22 @@
     (if (eqv? search-var saved-var)
         saved-val
         (apply-env saved-env search-var))))
+
+(define (extend-env-multiple vars vals env)
+  (if (null? vars)
+      env
+      (extend-env-multiple
+       (cdr vars)
+       (cdr vals)
+       (extend-env (car vars) (car vals) env))))
+
+(define (extend-env-rec p-name b-vars p-body saved-env)
+  (letrec ((fn
+               (lambda (search-var)
+                 (if (eqv? search-var p-name)
+                     (proc-val (procedure b-vars p-body fn))
+                     (apply-env saved-env search-var)))))
+    fn))
 
 (define (apply-env env search-var)
   (env search-var))
@@ -435,10 +455,17 @@
 
 ;; code
 
+;; (run "
+;; letrec add(x) = -(x, 10)
+;; in (add 5)
+;; ")
 
-(run "
-let double = proc (x)
-if zero?(x) then 0
-else -((double -(x, 1)), -2)
-in (double 6)
-")
+(run "letrec double(x)
+            = if zero?(x) then 0 else -((double -(x,1)), -2)
+       in (double 6)")
+
+
+;; (run "letrec double(x, y)
+;;             = if zero?(x) then 0 else +((double -(x, 1) y), y)
+;;        in (double 6 10)")
+
